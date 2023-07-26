@@ -89,6 +89,9 @@ export default class LogTugraphImporter extends Service {
   }
 
   private updateNode(type: NodeType, id: any, data: any, createdAt: Date) {
+    if (type === 'github_actor' && data.login.endsWith('[bot]')) {
+      data.is_bot = true;
+    }
     const dataMap = this.nodeMap.get(type)!;
     if (dataMap.has(id)) {
       const item = dataMap.get(id)!;
@@ -243,7 +246,7 @@ export default class LogTugraphImporter extends Service {
       pull.requested_reviewers.forEach(r => {
         const reviewerId = neo4j.int(r.id);
         const reviewerLogin = r.login;
-        this.updateNode('github_actor', reviewerId, { login: reviewerLogin }, createdAt);
+        this.updateNode('github_actor', reviewerId, { id: reviewerId, login: reviewerLogin }, createdAt);
         this.updateEdge('has_requested_reviewer', getTuGraphIssueId(), reviewerId, neo4j.int(-1), {}, createdAt);
       });
       const repo = pull.base.repo;
@@ -415,7 +418,7 @@ SET e += edge.data
 
   private formatDateTime(d: Date): any {
     return {
-      timestamp: neo4j.int(Math.round(d.getTime() / 1000)),
+      timestamp: neo4j.int(d.getTime()),
     };
   }
 
@@ -430,10 +433,12 @@ SET e += edge.data
         nodeTypes.forEach(type => {
           initQuries.push(`CREATE CONSTRAINT ${type}_unique IF NOT EXISTS FOR (r:${type}) REQUIRE r.${nodePrimaryKey.get(type) ?? 'id'} IS UNIQUE;`);
         });
-        initQuries.push('CREATE INDEX github_actor_login IF NOT EXISTS FOR (r:github_actor) ON (r.login);');
-        initQuries.push('CREATE INDEX github_org_login IF NOT EXISTS FOR (r:github_org) ON (r.login);');
-        initQuries.push('CREATE INDEX github_repo_name IF NOT EXISTS FOR (r:github_repo) ON (r.name);');
-        initQuries.push('CREATE INDEX action_timestamp IF NOT EXISTS FOR ()-[r:action]-() ON (r.timestamp);');
+        initQuries.push('CREATE CONSTRAINT action_id IF NOT EXISTS FOR ()-[r:action]-() REQUIRE r.id IS UNIQUE');
+        // initQuries.push('CREATE INDEX github_actor_login IF NOT EXISTS FOR (r:github_actor) ON (r.login);');
+        // initQuries.push('CREATE INDEX github_actor_bot IF NOT EXISTS FOR (r:github_actor) ON (r.is_bot);');
+        // initQuries.push('CREATE INDEX github_org_login IF NOT EXISTS FOR (r:github_org) ON (r.login);');
+        // initQuries.push('CREATE INDEX github_repo_name IF NOT EXISTS FOR (r:github_repo) ON (r.name);');
+        // initQuries.push('CREATE INDEX action_timestamp IF NOT EXISTS FOR ()-[r:action]-() ON (r.timestamp);');
         for (const q of initQuries) {
           await this.service.neo4j.runQuery(q);
         }
