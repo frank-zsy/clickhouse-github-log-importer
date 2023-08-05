@@ -11,9 +11,9 @@ interface EntityItem {
     [key: string]: any;
   };
 }
-type NodeType = 'github_repo' | 'github_org' | 'github_actor' | 'github_issue' | 'github_change_request' | 'issue_label' | 'language' | 'license';
+type NodeType = 'github_repo' | 'github_org' | 'github_actor' | 'github_issue_change_request' | 'issue_label' | 'language' | 'license';
 const nodeTypes: NodeType[] = [
-  'github_repo', 'github_org', 'github_actor', 'github_issue', 'github_change_request',
+  'github_repo', 'github_org', 'github_actor', 'github_issue_change_request',
   'issue_label', 'language', 'license',
 ];
 const nodePrimaryKey = new Map<NodeType, string>([
@@ -37,19 +37,19 @@ const edgeTypePair = new Map<EdgeType, string[]>([
   ['has_license', ['github_repo', 'license']],
   ['has_language', ['github_repo', 'language']],
   ['has_repo', ['github_org', 'github_repo']],
-  ['has_issue_change_request', ['github_repo', 'github_issue|github_change_request']],
-  ['has_issue_label', ['github_issue|github_change_request', 'issue_label']],
-  ['action', ['github_actor', 'github_issue|github_change_request']],
-  ['has_assignee', ['github_issue|github_change_request', 'github_actor']],
-  ['has_requested_reviewer', ['github_change_request', 'github_actor']],
+  ['has_issue_change_request', ['github_repo', 'github_issue_change_request']],
+  ['has_issue_label', ['github_issue_change_request', 'issue_label']],
+  ['action', ['github_actor', 'github_issue_change_request']],
+  ['has_assignee', ['github_issue_change_request', 'github_actor']],
+  ['has_requested_reviewer', ['github_issue_change_request', 'github_actor']],
 ]);
 
 export default class LogTugraphImporter extends Service {
 
-  private nodeMap: Map<NodeType, Map<neo4j.Integer, EntityItem>>;
-  private edgeMap: Map<EdgeType, Map<string, Map<neo4j.Integer, EdgeItem>>>;
-  private exportNodeMap: Map<NodeType, Map<neo4j.Integer, EntityItem>>;
-  private exportEdgeMap: Map<EdgeType, Map<string, Map<neo4j.Integer, EdgeItem>>>;
+  private nodeMap: Map<NodeType, Map<number, EntityItem>>;
+  private edgeMap: Map<EdgeType, Map<string, Map<number, EdgeItem>>>;
+  private exportNodeMap: Map<NodeType, Map<number, EntityItem>>;
+  private exportEdgeMap: Map<EdgeType, Map<string, Map<number, EdgeItem>>>;
   private isExporting = false;
 
   public async import(filePath: string, onSuccess: () => void): Promise<void> {
@@ -82,15 +82,18 @@ export default class LogTugraphImporter extends Service {
   }
 
   private init() {
-    this.nodeMap = new Map<NodeType, Map<neo4j.Integer, EntityItem>>();
-    this.edgeMap = new Map<EdgeType, Map<string, Map<neo4j.Integer, EdgeItem>>>();
-    nodeTypes.forEach(t => this.nodeMap.set(t, new Map<neo4j.Integer, EntityItem>()));
-    edgeTypes.forEach(t => this.edgeMap.set(t, new Map<string, Map<neo4j.Integer, EdgeItem>>()));
+    this.nodeMap = new Map<NodeType, Map<number, EntityItem>>();
+    this.edgeMap = new Map<EdgeType, Map<string, Map<number, EdgeItem>>>();
+    nodeTypes.forEach(t => this.nodeMap.set(t, new Map<number, EntityItem>()));
+    edgeTypes.forEach(t => this.edgeMap.set(t, new Map<string, Map<number, EdgeItem>>()));
   }
 
   private updateNode(type: NodeType, id: any, data: any, createdAt: Date) {
     if (type === 'github_actor' && data.login.endsWith('[bot]')) {
       data.is_bot = true;
+    }
+    if (type === 'github_actor' || type === 'github_repo' || type === 'github_org') {
+      id = neo4j.integer.toNumber(id);
     }
     const dataMap = this.nodeMap.get(type)!;
     if (dataMap.has(id)) {
@@ -111,14 +114,14 @@ export default class LogTugraphImporter extends Service {
     const key = `${from}_${to}`;
     const dataMap = this.edgeMap.get(type)!;
     if (!dataMap.has(key)) {
-      dataMap.set(key, new Map<neo4j.Integer, EdgeItem>());
+      dataMap.set(key, new Map<number, EdgeItem>());
     }
-    const item = dataMap.get(key)!.get(id) ?? { from, to, id, data, createdAt };
+    const item = dataMap.get(key)!.get(neo4j.integer.toNumber(id)) ?? { from, to, id, data, createdAt };
     if (item.createdAt.getTime() <= createdAt.getTime()) {
       item.data = data;
       item.createdAt = createdAt;
     }
-    dataMap.get(key)!.set(id, item);
+    dataMap.get(key)!.set(neo4j.integer.toNumber(id), item);
   }
 
   private parse(line: string) {
@@ -168,8 +171,9 @@ export default class LogTugraphImporter extends Service {
       const number = neo4j.int(issue.number);
       const title = issue.title;
       const body = issue.body ?? '';
-      this.updateNode(isPull ? 'github_change_request' : 'github_issue', getTuGraphIssueId(), {
+      this.updateNode('github_issue_change_request', getTuGraphIssueId(), {
         id: getTuGraphIssueId(),
+        type: isPull ? 'change_request' : 'issue',
         number,
         title,
         body,
@@ -204,9 +208,8 @@ export default class LogTugraphImporter extends Service {
     };
 
     const parseIssueComment = () => {
-      const id = neo4j.int(r.payload.comment.id);
       const body = r.payload.comment.body;
-      this.updateEdge('action', actorId, getTuGraphIssueId(), id, { id, body, type: 'comment', ...created_at }, createdAt);
+      this.updateEdge('action', actorId, getTuGraphIssueId(), eventId, { id: eventId, body, type: 'comment', ...created_at }, createdAt);
     };
 
     const parsePullRequest = () => {
@@ -234,8 +237,9 @@ export default class LogTugraphImporter extends Service {
       }
       if ([commits, additions, deletions, changed_files].some(i => i.isPositive())) {
         // these may not exists for some events
-        this.updateNode('github_change_request', getTuGraphIssueId(), {
+        this.updateNode('github_issue_change_request', getTuGraphIssueId(), {
           id: getTuGraphIssueId(),
+          type: 'change_request',
           commits,
           additions,
           deletions,
@@ -269,15 +273,17 @@ export default class LogTugraphImporter extends Service {
         if (repo[f]) this.updateNode('github_repo', repoId, { [f]: new Date(repo[f]).toISOString() }, createdAt);
       });
       if (this.check(pull.base?.ref, pull.base?.sha)) {
-        this.updateNode('github_change_request', getTuGraphIssueId(), {
+        this.updateNode('github_issue_change_request', getTuGraphIssueId(), {
           base_ref: pull.base.ref,
+          type: 'change_request',
         }, createdAt);
       }
       if (this.check(pull.head?.ref, pull.head?.sha, pull.head?.repo)) {
-        this.updateNode('github_change_request', getTuGraphIssueId(), {
+        this.updateNode('github_issue_change_request', getTuGraphIssueId(), {
           head_id: neo4j.int(pull.head.repo.id),
           head_name: pull.head.repo.full_name,
           head_ref: pull.head.ref,
+          type: 'change_request',
         }, createdAt);
       }
       return pull;
@@ -288,9 +294,8 @@ export default class LogTugraphImporter extends Service {
       const review = r.payload.review;
       const body = review.body ?? '';
       const state = review.state ?? '';
-      const id = neo4j.int(review.id ?? 0);
-      this.updateEdge('action', actorId, getTuGraphIssueId(), id, {
-        id,
+      this.updateEdge('action', actorId, getTuGraphIssueId(), eventId, {
+        id: eventId,
         type: 'review',
         body,
         state,
@@ -301,14 +306,13 @@ export default class LogTugraphImporter extends Service {
     const parsePullRequestReviewComment = () => {
       parsePullRequest();
       const comment = r.payload.comment;
-      const id = neo4j.int(comment.id);
       const body = comment.body;
       const path = comment.path;
       const position = neo4j.int(comment.position ?? 0);
       const line = neo4j.int(comment.line ?? 0);
       const startLine = neo4j.int(comment.start_line ?? 0);
-      this.updateEdge('action', actorId, getTuGraphIssueId(), id, {
-        id,
+      this.updateEdge('action', actorId, getTuGraphIssueId(), eventId, {
+        id: eventId,
         body,
         path,
         position,
@@ -357,7 +361,7 @@ export default class LogTugraphImporter extends Service {
             ...i[1].data,
           },
         };
-        if (['github_actor', 'github_repo', 'github_org', 'github_issue', 'github_change_request'].includes(type)) {
+        if (['github_actor', 'github_repo', 'github_org', 'github_issue_change_request'].includes(type)) {
           n.properties.__updated_at = i[1].createdAt.toISOString();
         }
         return n;
@@ -378,8 +382,6 @@ SET n += node.properties
       let hasId = false;
       const map = this.exportEdgeMap.get(type)!;
       const [fromLabel, toLabel]: any[] = edgeTypePair.get(type)!;
-      const fromLabels = fromLabel.split('|');
-      const toLabels = toLabel.split('|');
       const [fromKey, toKey] = [fromLabel, toLabel].map(t => nodePrimaryKey.get(t) ?? 'id');
       for (const m of map.values()) {
         for (const v of m.values()) {
@@ -388,24 +390,23 @@ SET n += node.properties
             from: v.from,
             to: v.to,
             data: v.data ?? {},
-            id: v.id ?? neo4j.int(-1),
+            id: v.id ?? undefined,
           });
           if (v.id && v.id.isPositive()) hasId = true;
         }
       }
       if (edges.length === 0) continue;
       try {
-        await this.service.neo4j.runQueryWithParamBatch(`
+        const cypher = `
 UNWIND $edges AS edge
-MATCH (from${fromLabels.length > 1 ? '' : `:${fromLabel}`}{${fromKey}:edge.from})
-${fromLabels.length > 1 ? `WHERE ${fromLabels.map(l => `from:${l}`).join(' OR ')}` : ''}
+MATCH (from:${`${fromLabel}`}{${fromKey}:edge.from})
 WITH edge, from
-MATCH (to${toLabels.length > 1 ? '' : `:${toLabel}`}{${toKey}:edge.to})
-${toLabels.length > 1 ? `WHERE ${toLabels.map(l => `to:${l}`).join(' OR ')}` : ''}
+MATCH (to:${`${toLabel}`}{${toKey}:edge.to})
 WITH edge, from, to
 MERGE (from)-[e:${type}${hasId ? '{id:edge.id}' : ''}]->(to)
-SET e += edge.data
-`, edges, 'edges');
+ON CREATE SET e += edge.data
+`;
+        await this.service.neo4j.runQueryWithParamBatch(cypher, edges, 'edges');
       } catch (e) {
         this.logger.error(`Error on insert edges ${type}, e=${e}`);
       }
@@ -433,7 +434,7 @@ SET e += edge.data
         nodeTypes.forEach(type => {
           initQuries.push(`CREATE CONSTRAINT ${type}_unique IF NOT EXISTS FOR (r:${type}) REQUIRE r.${nodePrimaryKey.get(type) ?? 'id'} IS UNIQUE;`);
         });
-        initQuries.push('CREATE CONSTRAINT action_id IF NOT EXISTS FOR ()-[r:action]-() REQUIRE r.id IS UNIQUE');
+        initQuries.push('CREATE CONSTRAINT action_id IF NOT EXISTS FOR ()-[r:action]->() REQUIRE (r.id) IS UNIQUE');
         // initQuries.push('CREATE INDEX github_actor_login IF NOT EXISTS FOR (r:github_actor) ON (r.login);');
         // initQuries.push('CREATE INDEX github_actor_bot IF NOT EXISTS FOR (r:github_actor) ON (r.is_bot);');
         // initQuries.push('CREATE INDEX github_org_login IF NOT EXISTS FOR (r:github_org) ON (r.login);');

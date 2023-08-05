@@ -37,7 +37,7 @@ export default class LogImporter extends Service {
           });
         }
       }
-    } if (config.usingTugraph) {
+    } else if (config.usingTugraph) {
       let importedCount = 0;
       for (const f in meta) {
         if (meta[f] === FileStatus.Verified) {
