@@ -344,7 +344,8 @@ export default class LogTugraphImporter extends Service {
     for (const type of nodeTypes) {
       const map = this.exportNodeMap.get(type)!;
       const primary = nodePrimaryKey.get(type) ?? 'id';
-      const nodes = Array.from(map.entries()).map(i => {
+      const nodes: any[] = [];
+      for (const i of map.entries()) {
         let id: any = i[0];
         const data = i[1].data;
         if (['github_actor', 'github_repo', 'github_org', 'github_issue_change_request'].includes(type)) {
@@ -366,14 +367,13 @@ export default class LogTugraphImporter extends Service {
             data[f] = new Date(data[f]).toISOString();
           }
         });
-        const n: any = {
+        nodes.push({
           [primary]: id,
           properties: {
             ...i[1].data,
           },
-        };
-        return n;
-      });
+        });
+      }
       if (nodes.length === 0) continue;
       processArr.push(this.service.neo4j.runQueryWithParamBatch(`
 UNWIND $nodes AS node
