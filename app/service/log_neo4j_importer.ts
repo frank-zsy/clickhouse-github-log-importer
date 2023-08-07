@@ -363,11 +363,14 @@ export default class LogTugraphImporter extends Service {
           }
         } else if (type === 'github_issue_change_request') {
           data.__updated_at = i[1].createdAt.toISOString();
-          ['number', 'commits', 'additions', 'deletions', 'changed_files', 'head_id'].forEach(f => {
-            if (data[f] > 0) {
-              data[f] = neo4j.int(data[f]);
-            }
-          });
+          if (data.number) data.number = neo4j.int(data.number);
+          if (data.type === 'change_request') {
+            ['commits', 'additions', 'deletions', 'changed_files', 'head_id'].forEach(f => {
+              if (data[f] > 0) {
+                data[f] = neo4j.int(data[f]);
+              }
+            });
+          }
         }
         nodes.push({
           [primary]: id,
