@@ -51,9 +51,11 @@ export default class LogTugraphImporter extends Service {
   private exportNodeMap: Map<NodeType, Map<number | string, EntityItem>>;
   private exportEdgeMap: Map<EdgeType, Map<string, Map<number, EdgeItem>>>;
   private isExporting = false;
+  private lastParseTime = 0;
 
   public async import(filePath: string, onSuccess: () => void): Promise<void> {
     this.init();
+    const parseStartTime = new Date().getTime();
     await this.service.fileUtils.readlineUnzip(filePath, async line => {
       try {
         this.parse(line);
@@ -61,20 +63,28 @@ export default class LogTugraphImporter extends Service {
         this.logger.error(`Error on parse line, e=${JSON.stringify(e.message)}, line=${line}`);
       }
     });
+    const parseTime = new Date().getTime() - parseStartTime;
     // wait until last insert done
     await waitUntil(() => !this.isExporting, 10);
+    this.lastParseTime = parseTime;
     this.isExporting = true;
     // change node map and edge map reference to avoid next data procedure clear the data on inserting
     this.exportNodeMap = this.nodeMap;
     this.exportEdgeMap = this.edgeMap;
     (async () => {
+      const insertNodesStart = new Date().getTime();
       try {
         await this.insertNodes();
       } catch (e) {
         this.logger.error(`Error on insert nodes, e=${e}`);
       }
+      const insertNodesTime = new Date().getTime() - insertNodesStart;
+
+      const insertEdgesStart = new Date().getTime();
       await this.insertEdges();
-      this.logger.info(`Insert ${filePath} done.`);
+      const insertEdgesTime = new Date().getTime() - insertEdgesStart;
+
+      this.logger.info(`Insert ${filePath} done. Durations are ${this.lastParseTime}, ${insertNodesTime}, ${insertEdgesTime}`);
       this.isExporting = false;
       onSuccess();
     })();
