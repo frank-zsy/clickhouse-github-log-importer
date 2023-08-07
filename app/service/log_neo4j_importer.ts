@@ -53,13 +53,14 @@ export default class LogTugraphImporter extends Service {
   private modifyIdSet: Set<NodeType> = new Set<NodeType>(['github_actor', 'github_org', 'github_repo']);
   private isExporting = false;
   private lastParseTime = 0;
-  private parseEvents: Set<string> = new Set<string>(['IssuesEvent', 'IssueCommentEvent', 'PullRequestEvent', 'PullRequestReviewEvent', 'PullRequestReviewCommentEvent']);
+  private parseEvents = ['IssuesEvent', 'IssueCommentEvent', 'PullRequestEvent', 'PullRequestReviewEvent', 'PullRequestReviewCommentEvent'];
 
   public async import(filePath: string, onSuccess: () => void): Promise<void> {
     this.init();
     const parseStartTime = new Date().getTime();
     await this.service.fileUtils.readlineUnzip(filePath, async line => {
       try {
+        if (!this.parseEvents.some(e => line.includes(e))) return;
         this.parse(line);
       } catch (e: any) {
         this.logger.error(`Error on parse line, e=${JSON.stringify(e.message)}, line=${line}`);
@@ -132,7 +133,6 @@ export default class LogTugraphImporter extends Service {
   private parse(line: string) {
     const r = JSON.parse(line);
     const type = r.type;
-    if (!this.parseEvents.has(type)) return;
     const action = r.payload?.action;
 
     const eventId = r.id;
