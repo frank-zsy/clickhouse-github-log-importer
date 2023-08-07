@@ -220,8 +220,9 @@ export default class LogTugraphImporter extends Service {
     };
 
     const parseIssueComment = () => {
+      parseIssue();
       const body = r.payload.comment.body;
-      this.updateEdge('action', actorId, getIssueChangeRequestId(), eventId, { body, type: 'comment', ...created_at }, createdAt);
+      this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', ...created_at }, createdAt);
     };
 
     const parsePullRequest = () => {
