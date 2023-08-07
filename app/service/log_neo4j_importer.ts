@@ -50,6 +50,7 @@ export default class LogTugraphImporter extends Service {
   private edgeMap: Map<EdgeType, Map<string, Map<number, EdgeItem>>>;
   private exportNodeMap: Map<NodeType, Map<number | string, EntityItem>>;
   private exportEdgeMap: Map<EdgeType, Map<string, Map<number, EdgeItem>>>;
+  private modifyIdSet: Set<NodeType> = new Set<NodeType>(['github_actor', 'github_org', 'github_repo']);
   private isExporting = false;
   private lastParseTime = 0;
 
@@ -348,25 +349,26 @@ export default class LogTugraphImporter extends Service {
       for (const i of map.entries()) {
         let id: any = i[0];
         const data = i[1].data;
-        if (['github_actor', 'github_repo', 'github_org', 'github_issue_change_request'].includes(type)) {
+        if (this.modifyIdSet.has(type)) {
           data.__updated_at = i[1].createdAt.toISOString();
-          if (type !== 'github_issue_change_request') {
-            id = neo4j.int(id);
-          }
+          id = neo4j.int(id);
           if (type === 'github_actor' && data.login.endsWith('[bot]')) {
             data.is_bot = true;
+          } else if (type === 'github_repo') {
+            ['created_at', 'updated_at', 'pushed_at'].forEach(f => {
+              if (data[f]) {
+                data[f] = new Date(data[f]).toISOString();
+              }
+            });
           }
+        } else if (type === 'github_issue_change_request') {
+          data.__updated_at = i[1].createdAt.toISOString();
+          ['number', 'commits', 'additions', 'deletions', 'changed_files', 'head_id'].forEach(f => {
+            if (data[f] > 0) {
+              data[f] = neo4j.int(data[f]);
+            }
+          });
         }
-        ['number', 'commits', 'additions', 'deletions', 'changed_files', 'head_id'].forEach(f => {
-          if (data[f] > 0) {
-            data[f] = neo4j.int(data[f]);
-          }
-        });
-        ['created_at', 'updated_at', 'pushed_at'].forEach(f => {
-          if (data[f]) {
-            data[f] = new Date(data[f]).toISOString();
-          }
-        });
         nodes.push({
           [primary]: id,
           properties: {
