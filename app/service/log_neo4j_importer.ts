@@ -31,7 +31,7 @@ interface EdgeItem {
 }
 type EdgeType = 'has_license' | 'has_language' | 'has_repo' | 'has_issue_change_request' | 'has_issue_label' | 'action' | 'has_assignee' | 'has_requested_reviewer';
 const edgeTypes: EdgeType[] = ['has_license', 'has_language', 'has_repo', 'has_issue_change_request', 'has_issue_label', 'action', 'has_assignee', 'has_requested_reviewer'];
-const edgeTypePair = new Map<EdgeType, string[]>([
+const edgeTypePair = new Map<EdgeType, NodeType[]>([
   ['has_license', ['github_repo', 'license']],
   ['has_language', ['github_repo', 'language']],
   ['has_repo', ['github_org', 'github_repo']],
@@ -165,7 +165,7 @@ export default class LogTugraphImporter extends Service {
       isPull = true;
     }
     if (!this.check(issue)) {
-      this.logger.info(`Issue not found ${r.payload}`);
+      this.logger.info(`Issue not found ${JSON.stringify(r.payload)}`);
       return;
     }
     const number = issue.number;
