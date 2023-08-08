@@ -155,39 +155,32 @@ export default class LogTugraphImporter extends Service {
     }
 
     const created_at = this.formatDateTime(new Date(r.created_at));
-    const getIssueChangeRequestId = (): string => {
-      const issue = r.payload.issue ?? r.payload.pull_request;
-      const number = issue.number;
-      return `${repoId}_${number}`;
-    };
+    let issue = r.payload.issue;
+    let isPull = false;
+    if (!issue) {
+      issue = r.payload.pull_request;
+      isPull = true;
+    } else if (issue.pull_request) {
+      // for issue comment event, there will be a pull_request field in issue
+      isPull = true;
+    }
+    if (!this.check(issue)) {
+      this.logger.info(`Issue not found ${r.payload}`);
+      return;
+    }
+    const number = issue.number;
+    const issueChangeRequestId = `${repoId}_${number}`;
 
-    let issueChangeRequestId = '';
+    const title = issue.title;
+    const body = issue.body ?? '';
+    this.updateNode('github_issue_change_request', issueChangeRequestId, {
+      type: isPull ? 'change_request' : 'issue',
+      number,
+      title,
+      body,
+    });
 
     const parseIssue = () => {
-      issueChangeRequestId = getIssueChangeRequestId();
-      let issue = r.payload.issue;
-      let isPull = false;
-      if (!issue) {
-        issue = r.payload.pull_request;
-        isPull = true;
-      }
-      if (issue.pull_request) {
-        // for issue comment event, there will be a pull_request field in issue
-        isPull = true;
-      }
-      if (!this.check(issue)) {
-        this.logger.info(`Issue not found ${r.payload}`);
-        return;
-      }
-      const number = issue.number;
-      const title = issue.title;
-      const body = issue.body ?? '';
-      this.updateNode('github_issue_change_request', issueChangeRequestId, {
-        type: isPull ? 'change_request' : 'issue',
-        number,
-        title,
-        body,
-      });
       if (!Array.isArray(issue.labels)) issue.labels = [];
       issue.labels.forEach(l => {
         const label = l.name;
@@ -218,7 +211,6 @@ export default class LogTugraphImporter extends Service {
     };
 
     const parseIssueComment = () => {
-      parseIssue();
       const body = r.payload.comment.body;
       this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', ...created_at });
     };
@@ -294,11 +286,9 @@ export default class LogTugraphImporter extends Service {
           type: 'change_request',
         });
       }
-      return pull;
     };
 
     const parsePullRequestReview = () => {
-      parsePullRequest();
       const review = r.payload.review;
       const body = review.body ?? '';
       const state = review.state ?? '';
@@ -311,7 +301,6 @@ export default class LogTugraphImporter extends Service {
     };
 
     const parsePullRequestReviewComment = () => {
-      parsePullRequest();
       const comment = r.payload.comment;
       const body = comment.body;
       const path = comment.path;
