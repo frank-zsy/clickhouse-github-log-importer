@@ -6,7 +6,6 @@ import { stdin as input, stdout as output } from 'process';
 import neo4j = require('neo4j-driver');
 
 interface EntityItem {
-  createdAt: Date;
   data: {
     [key: string]: any;
   };
@@ -25,7 +24,6 @@ const nodePrimaryKey = new Map<NodeType, string>([
 interface EdgeItem {
   from: any;
   to: any;
-  createdAt: Date;
   id: neo4j.Integer;
   data?: {
     [key: string]: any;
@@ -100,34 +98,35 @@ export default class LogTugraphImporter extends Service {
     edgeTypes.forEach(t => this.edgeMap.set(t, new Map<string, Map<number, EdgeItem>>()));
   }
 
-  private updateNode(type: NodeType, id: number | string, data: any, createdAt: Date) {
+  private updateNode(type: NodeType, id: number | string, data: any) {
     const dataMap = this.nodeMap.get(type)!;
     if (dataMap.has(id)) {
       const item = dataMap.get(id)!;
-      if (item.createdAt.getTime() <= createdAt.getTime()) {
-        item.data = {
-          ...item.data,
-          ...data,
-        };
-        item.createdAt = createdAt;
-      }
+      item.data = {
+        ...item.data,
+        ...data,
+      };
     } else {
-      dataMap.set(id, { data, createdAt });
+      dataMap.set(id, { data });
     }
   }
 
-  private updateEdge(type: EdgeType, from: any, to: any, id: number, data: any, createdAt: Date) {
+  private updateEdge(type: EdgeType, from: any, to: any, id: number, data: any) {
     const key = `${from}_${to}`;
     const dataMap = this.edgeMap.get(type)!;
     if (!dataMap.has(key)) {
       dataMap.set(key, new Map<number, EdgeItem>());
     }
-    const item = dataMap.get(key)!.get(id) ?? { from, to, id: neo4j.int(id), data, createdAt };
-    if (item.createdAt.getTime() <= createdAt.getTime()) {
-      item.data = data;
-      item.createdAt = createdAt;
+    const edgeMap = dataMap.get(key)!;
+    if (edgeMap.has(id)) {
+      const item = edgeMap.get(id)!;
+      item.data = {
+        ...item.data,
+        ...data,
+      };
+    } else {
+      edgeMap.set(id, { from, to, id: neo4j.int(id), data });
     }
-    dataMap.get(key)!.set(id, item);
   }
 
   private parse(line: string) {
@@ -140,23 +139,22 @@ export default class LogTugraphImporter extends Service {
     const actorLogin = r.actor.login;
     const repoId = r.repo.id;
     const repoName = r.repo.name;
-    const createdAt = new Date(r.created_at);
-    if (!this.check(actorId, actorLogin, repoId, repoName, createdAt)) {
+    if (!this.check(actorId, actorLogin, repoId, repoName)) {
       this.logger.info(`Invalid line: ${line}`);
       return;
     }
-    this.updateNode('github_repo', repoId, { name: repoName }, createdAt);
-    this.updateNode('github_actor', actorId, { login: actorLogin }, createdAt);
+    this.updateNode('github_repo', repoId, { name: repoName });
+    this.updateNode('github_actor', actorId, { login: actorLogin });
     if (r.org) {
       const orgId = r.org.id;
       const orgLogin = r.org.login;
       if (this.check(orgId, orgLogin)) {
-        this.updateNode('github_org', orgId, { login: orgLogin }, createdAt);
-        this.updateEdge('has_repo', orgId, repoId, -1, {}, createdAt);
+        this.updateNode('github_org', orgId, { login: orgLogin });
+        this.updateEdge('has_repo', orgId, repoId, -1, {});
       }
     }
 
-    const created_at = this.formatDateTime(createdAt);
+    const created_at = this.formatDateTime(new Date(r.created_at));
     const getIssueChangeRequestId = (): string => {
       const issue = r.payload.issue ?? r.payload.pull_request;
       const number = issue.number;
@@ -189,32 +187,32 @@ export default class LogTugraphImporter extends Service {
         number,
         title,
         body,
-      }, createdAt);
+      });
       if (!Array.isArray(issue.labels)) issue.labels = [];
       issue.labels.forEach(l => {
         const label = l.name;
-        this.updateNode('issue_label', label, {}, createdAt);
-        this.updateEdge('has_issue_label', issueChangeRequestId, label, -1, {}, createdAt);
+        this.updateNode('issue_label', label, {});
+        this.updateEdge('has_issue_label', issueChangeRequestId, label, -1, {});
       });
       if (issue.assignee) {
         const assigneeId = issue.assignee.id;
         const assigneeLogin = issue.assignee.login;
-        this.updateNode('github_actor', assigneeId, { login: assigneeLogin }, createdAt);
-        this.updateEdge('has_assignee', issueChangeRequestId, assigneeId, -1, {}, createdAt);
+        this.updateNode('github_actor', assigneeId, { login: assigneeLogin });
+        this.updateEdge('has_assignee', issueChangeRequestId, assigneeId, -1, {});
       }
       if (!Array.isArray(issue.assignees)) issue.assignees = [];
       issue.assignees.forEach(a => {
         const assigneeId = a.id;
         const assigneeLogin = a.login;
-        this.updateNode('github_actor', assigneeId, { login: assigneeLogin }, createdAt);
-        this.updateEdge('has_assignee', issueChangeRequestId, assigneeId, -1, {}, createdAt);
+        this.updateNode('github_actor', assigneeId, { login: assigneeLogin });
+        this.updateEdge('has_assignee', issueChangeRequestId, assigneeId, -1, {});
       });
-      this.updateEdge('has_issue_change_request', repoId, issueChangeRequestId, -1, {}, createdAt);
+      this.updateEdge('has_issue_change_request', repoId, issueChangeRequestId, -1, {});
 
       if (action === 'opened') {
-        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'open', ...created_at }, createdAt);
+        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'open', ...created_at });
       } else if (action === 'closed') {
-        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'close', ...created_at }, createdAt);
+        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'close', ...created_at });
       }
       return issue;
     };
@@ -222,7 +220,7 @@ export default class LogTugraphImporter extends Service {
     const parseIssueComment = () => {
       parseIssue();
       const body = r.payload.comment.body;
-      this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', ...created_at }, createdAt);
+      this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', ...created_at });
     };
 
     const parsePullRequest = () => {
@@ -237,13 +235,13 @@ export default class LogTugraphImporter extends Service {
             type: 'close',
             merged: true,
             ...created_at,
-          }, createdAt);
+          });
         } else {
           this.updateEdge('action', actorId, issueChangeRequestId, eventId, {
             type: 'close',
             merged: false,
             ...created_at,
-          }, createdAt);
+          });
         }
       }
       if ([commits, additions, deletions, changed_files].some(i => i > 0)) {
@@ -254,39 +252,39 @@ export default class LogTugraphImporter extends Service {
           additions,
           deletions,
           changed_files,
-        }, createdAt);
+        });
       }
       if (!Array.isArray(pull.requested_reviewers)) pull.requested_reviewers = [];
       pull.requested_reviewers.forEach(r => {
         const reviewerId = r.id;
         const reviewerLogin = r.login;
-        this.updateNode('github_actor', reviewerId, { login: reviewerLogin }, createdAt);
-        this.updateEdge('has_requested_reviewer', issueChangeRequestId, reviewerId, -1, {}, createdAt);
+        this.updateNode('github_actor', reviewerId, { login: reviewerLogin });
+        this.updateEdge('has_requested_reviewer', issueChangeRequestId, reviewerId, -1, {});
       });
       const repo = pull.base.repo;
       if (repo.language) {
         const language = repo.language;
-        this.updateNode('language', language, {}, createdAt);
-        this.updateEdge('has_language', repoId, language, -1, {}, createdAt);
+        this.updateNode('language', language, {});
+        this.updateEdge('has_language', repoId, language, -1, {});
       }
       if (repo.license) {
         const spdx_id = repo.license.spdx_id;
         if (this.check(spdx_id)) {
-          this.updateNode('license', spdx_id, {}, createdAt);
-          this.updateEdge('has_license', repoId, spdx_id, -1, {}, createdAt);
+          this.updateNode('license', spdx_id, {});
+          this.updateEdge('has_license', repoId, spdx_id, -1, {});
         }
       }
       ['description', 'default_branch'].forEach(f => {
-        if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] }, createdAt);
+        if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] });
       });
       ['updated_at', 'created_at', 'pushed_at'].forEach(f => {
-        if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] }, createdAt);
+        if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] });
       });
       if (this.check(pull.base?.ref, pull.base?.sha)) {
         this.updateNode('github_issue_change_request', issueChangeRequestId, {
           base_ref: pull.base.ref,
           type: 'change_request',
-        }, createdAt);
+        });
       }
       if (this.check(pull.head?.ref, pull.head?.sha, pull.head?.repo)) {
         this.updateNode('github_issue_change_request', issueChangeRequestId, {
@@ -294,7 +292,7 @@ export default class LogTugraphImporter extends Service {
           head_name: pull.head.repo.full_name,
           head_ref: pull.head.ref,
           type: 'change_request',
-        }, createdAt);
+        });
       }
       return pull;
     };
@@ -309,7 +307,7 @@ export default class LogTugraphImporter extends Service {
         body,
         state,
         ...created_at,
-      }, createdAt);
+      });
     };
 
     const parsePullRequestReviewComment = () => {
@@ -328,7 +326,7 @@ export default class LogTugraphImporter extends Service {
         start_line: startLine,
         type: 'review_comment',
         ...created_at,
-      }, createdAt);
+      });
     };
 
     const parseMap = new Map<string, Function>([
@@ -353,7 +351,6 @@ export default class LogTugraphImporter extends Service {
         let id: any = i[0];
         const data = i[1].data;
         if (this.modifyIdSet.has(type)) {
-          data.__updated_at = i[1].createdAt.toISOString();
           id = neo4j.int(id);
           if (type === 'github_actor' && data.login.endsWith('[bot]')) {
             data.is_bot = true;
@@ -365,7 +362,6 @@ export default class LogTugraphImporter extends Service {
             });
           }
         } else if (type === 'github_issue_change_request') {
-          data.__updated_at = i[1].createdAt.toISOString();
           if (data.number) data.number = neo4j.int(data.number);
           if (data.type === 'change_request') {
             ['commits', 'additions', 'deletions', 'changed_files', 'head_id'].forEach(f => {
@@ -393,7 +389,7 @@ SET n += node.properties
   }
 
   private async insertEdges() {
-    for (const type of edgeTypes) {
+    const insertType = async (type: EdgeType) => {
       const edges: any[] = [];
       const map = this.exportEdgeMap.get(type)!;
       const [fromLabel, toLabel]: any[] = edgeTypePair.get(type)!;
@@ -409,7 +405,7 @@ SET n += node.properties
           });
         }
       }
-      if (edges.length === 0) continue;
+      if (edges.length === 0) return;
       try {
         const cypher = `
 UNWIND $edges AS edge
@@ -421,7 +417,19 @@ SET e += edge.data
       } catch (e) {
         this.logger.error(`Error on insert edges ${type}, e=${e}`);
       }
-    }
+    };
+    // update different edges in async process to accelerate
+    await insertType('has_issue_change_request');
+    await Promise.all([(async () => {
+      await insertType('has_language');
+      await insertType('has_license');
+      await insertType('has_repo');
+    })(), (async () => {
+      await insertType('has_assignee');
+      await insertType('has_issue_label');
+      await insertType('has_requested_reviewer');
+      await insertType('action');
+    })()]);
   }
 
   private check(...params: any[]): boolean {
