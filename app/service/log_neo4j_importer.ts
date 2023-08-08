@@ -332,8 +332,7 @@ export default class LogTugraphImporter extends Service {
   }
 
   private async insertNodes() {
-    const processArr: any[] = [];
-    for (const type of nodeTypes) {
+    const insertType = async (type: NodeType) => {
       const map = this.exportNodeMap.get(type)!;
       const primary = nodePrimaryKey.get(type) ?? 'id';
       const nodes: any[] = [];
@@ -362,14 +361,14 @@ export default class LogTugraphImporter extends Service {
           },
         });
       }
-      if (nodes.length === 0) continue;
-      processArr.push(this.service.neo4j.runQueryWithParamBatch(`
+      if (nodes.length === 0) return;
+      await this.service.neo4j.runQueryWithParamBatch(`
 UNWIND $nodes AS node
 MERGE (n:${type}{${primary}:node.${primary}})
 SET n += node.properties
-`, nodes, 'nodes'));
-    }
-    await Promise.all(processArr);
+`, nodes, 'nodes');
+    };
+    await Promise.all(nodeTypes.map(insertType));
   }
 
   private async insertEdges() {
@@ -402,18 +401,9 @@ SET e += edge.data
         this.logger.error(`Error on insert edges ${type}, e=${e}`);
       }
     };
-    // update different edges in async process to accelerate
-    await insertType('has_issue_change_request');
-    await Promise.all([(async () => {
-      await insertType('has_language');
-      await insertType('has_license');
-      await insertType('has_repo');
-    })(), (async () => {
-      await insertType('has_assignee');
-      await insertType('has_issue_label');
-      await insertType('has_requested_reviewer');
-      await insertType('action');
-    })()]);
+    for (const type of edgeTypes) {
+      await insertType(type);
+    }
   }
 
   private check(...params: any[]): boolean {
