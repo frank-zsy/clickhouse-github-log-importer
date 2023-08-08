@@ -133,6 +133,21 @@ export default class LogTugraphImporter extends Service {
 
   private parse(line: string) {
     const r = JSON.parse(line);
+
+    let issue = r.payload.issue;
+    let isPull = false;
+    if (!issue) {
+      issue = r.payload.pull_request;
+      isPull = true;
+    } else if (issue.pull_request) {
+      // for issue comment event, there will be a pull_request field in issue
+      isPull = true;
+    }
+    if (!this.check(issue)) {
+      // check issue first, in case event names in line string
+      return;
+    }
+
     const type = r.type;
     const action = r.payload?.action;
 
@@ -157,19 +172,6 @@ export default class LogTugraphImporter extends Service {
     }
 
     const timestamp = neo4j.int(new Date(r.created_at).getTime());
-    let issue = r.payload.issue;
-    let isPull = false;
-    if (!issue) {
-      issue = r.payload.pull_request;
-      isPull = true;
-    } else if (issue.pull_request) {
-      // for issue comment event, there will be a pull_request field in issue
-      isPull = true;
-    }
-    if (!this.check(issue)) {
-      this.logger.info(`Issue not found ${JSON.stringify(line)}`);
-      return;
-    }
     const number = issue.number;
     const issueChangeRequestId = `${repoId}_${number}`;
 
