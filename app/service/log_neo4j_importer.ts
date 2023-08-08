@@ -54,6 +54,8 @@ export default class LogTugraphImporter extends Service {
   private parseEvents = ['IssuesEvent', 'IssueCommentEvent', 'PullRequestEvent', 'PullRequestReviewEvent', 'PullRequestReviewCommentEvent'];
 
   public async import(filePath: string, onSuccess: () => void): Promise<void> {
+    const fileNameList = filePath.split('/');
+    const fileName = fileNameList[fileNameList.length - 1];
     this.init();
     const parseStartTime = new Date().getTime();
     await this.service.fileUtils.readlineUnzip(filePath, async line => {
@@ -85,7 +87,7 @@ export default class LogTugraphImporter extends Service {
       await this.insertEdges();
       const insertEdgesTime = new Date().getTime() - insertEdgesStart;
 
-      this.logger.info(`Insert ${filePath} done. Durations are ${this.lastParseTime}, ${insertNodesTime}, ${insertEdgesTime}`);
+      this.logger.info(`Insert ${fileName} done. Durations are ${this.lastParseTime},${insertNodesTime},${insertEdgesTime}`);
       this.isExporting = false;
       onSuccess();
     })();
