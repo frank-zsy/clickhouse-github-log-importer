@@ -156,7 +156,7 @@ export default class LogTugraphImporter extends Service {
       }
     }
 
-    const created_at = this.formatDateTime(new Date(r.created_at));
+    const timestamp = neo4j.int(new Date(r.created_at).getTime());
     let issue = r.payload.issue;
     let isPull = false;
     if (!issue) {
@@ -167,7 +167,7 @@ export default class LogTugraphImporter extends Service {
       isPull = true;
     }
     if (!this.check(issue)) {
-      this.logger.info(`Issue not found ${JSON.stringify(r.payload)}`);
+      this.logger.info(`Issue not found ${JSON.stringify(line)}`);
       return;
     }
     const number = issue.number;
@@ -205,16 +205,16 @@ export default class LogTugraphImporter extends Service {
       this.updateEdge('has_issue_change_request', repoId, issueChangeRequestId, -1, {});
 
       if (action === 'opened') {
-        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'open', ...created_at });
+        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'open', timestamp });
       } else if (action === 'closed') {
-        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'close', ...created_at });
+        this.updateEdge('action', actorId, issueChangeRequestId, eventId, { type: 'close', timestamp });
       }
       return issue;
     };
 
     const parseIssueComment = () => {
       const body = r.payload.comment.body;
-      this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', ...created_at });
+      this.updateEdge('action', actorId, issueChangeRequestId, eventId, { body, type: 'comment', timestamp });
     };
 
     const parsePullRequest = () => {
@@ -228,13 +228,13 @@ export default class LogTugraphImporter extends Service {
           this.updateEdge('action', actorId, issueChangeRequestId, eventId, {
             type: 'close',
             merged: true,
-            ...created_at,
+            timestamp,
           });
         } else {
           this.updateEdge('action', actorId, issueChangeRequestId, eventId, {
             type: 'close',
             merged: false,
-            ...created_at,
+            timestamp,
           });
         }
       }
@@ -271,9 +271,6 @@ export default class LogTugraphImporter extends Service {
       ['description', 'default_branch'].forEach(f => {
         if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] });
       });
-      ['updated_at', 'created_at', 'pushed_at'].forEach(f => {
-        if (repo[f]) this.updateNode('github_repo', repoId, { [f]: repo[f] });
-      });
       if (this.check(pull.base?.ref, pull.base?.sha)) {
         this.updateNode('github_issue_change_request', issueChangeRequestId, {
           base_ref: pull.base.ref,
@@ -298,7 +295,7 @@ export default class LogTugraphImporter extends Service {
         type: 'review',
         body,
         state,
-        ...created_at,
+        timestamp,
       });
     };
 
@@ -316,7 +313,7 @@ export default class LogTugraphImporter extends Service {
         line,
         start_line: startLine,
         type: 'review_comment',
-        ...created_at,
+        timestamp,
       });
     };
 
@@ -345,12 +342,6 @@ export default class LogTugraphImporter extends Service {
           id = neo4j.int(id);
           if (type === 'github_actor' && data.login.endsWith('[bot]')) {
             data.is_bot = true;
-          } else if (type === 'github_repo') {
-            ['created_at', 'updated_at', 'pushed_at'].forEach(f => {
-              if (data[f]) {
-                data[f] = new Date(data[f]).toISOString();
-              }
-            });
           }
         } else if (type === 'github_issue_change_request') {
           if (data.number) data.number = neo4j.int(data.number);
@@ -425,12 +416,6 @@ SET e += edge.data
 
   private check(...params: any[]): boolean {
     return params.every(p => p !== null && p !== undefined);
-  }
-
-  private formatDateTime(d: Date): any {
-    return {
-      timestamp: neo4j.int(d.getTime()),
-    };
   }
 
   public async initDatabase(forceInit: boolean) {
