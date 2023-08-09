@@ -44,7 +44,7 @@ export default class Neo4jService extends Service {
     });
   }
 
-  public async runQueryWithParamBatch(query: string, params: any, key: string, batch = 100000) {
+  public async runQueryWithParamBatch(query: string, params: any, key: string, batch = 5000) {
     if (params.length <= 0) return;
     if (params.length <= batch) {
       await this.runQuery(query, { [key]: params });
