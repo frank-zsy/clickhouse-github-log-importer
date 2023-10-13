@@ -107,6 +107,10 @@ export const FieldMap = new Map<string, string>([
   ['repo_created_at', 'Nullable(DateTime)'],
   ['repo_updated_at', 'Nullable(DateTime)'],
   ['repo_pushed_at', 'Nullable(DateTime)'],
+  ['repo_topics', `Nested
+  (
+    name LowCardinality(String)
+  )`],
   // PullRequestReviewEvent_created
   ['pull_review_state', reviewStateType],
   ['pull_review_author_association', associationType],

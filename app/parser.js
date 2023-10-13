@@ -140,6 +140,7 @@ function pullRequestParser(r) {
   if (repo.default_branch) {
     o.repo_default_branch = repo.default_branch;
   }
+  o['repo_topics.name'] = repo.topics ?? [];
   o.repo_created_at = formatDateTime(repo.created_at);
   o.repo_updated_at = formatDateTime(repo.updated_at);
   o.repo_pushed_at = formatDateTime(repo.pushed_at);
