@@ -24,7 +24,7 @@ export const FieldMap = new Map<string, string>([
   ['type', `Enum('CommitCommentEvent' = 1, 'CreateEvent' = 2, 'DeleteEvent' = 3, 'ForkEvent' = 4,
                     'GollumEvent' = 5, 'IssueCommentEvent' = 6, 'IssuesEvent' = 7, 'MemberEvent' = 8,
                     'PublicEvent' = 9, 'PullRequestEvent' = 10, 'PullRequestReviewCommentEvent' = 11,
-                    'PushEvent' = 12, 'ReleaseEvent' = 13, 'WatchEvent' = 14, 'PullRequestReviewEvent' = 15
+                    'PushEvent' = 12, 'ReleaseEvent' = 13, 'WatchEvent' = 14, 'PullRequestReviewEvent' = 15,
                     'IssuesReactionEvent' = 16)`],
   ['action', `Enum('added' = 1, 'closed' = 2, 'created' = 3, 'labeled' = 4, 'opened' = 5, 'published' = 6,
                     'reopened' = 7, 'started' = 8)`],
