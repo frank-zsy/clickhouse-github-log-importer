@@ -119,8 +119,8 @@ export default class LogImporter extends Service {
       initQuerys.push(`CREATE TABLE IF NOT EXISTS ${dbConfig.table}
 (
 ${getTableSchema(FieldMap)}
-) ENGINE = ReplacingMergeTree(id)
-ORDER BY (type, repo_name, created_at)
+) ENGINE = ReplacingMergeTree
+ORDER BY (type, repo_id, org_id, actor_id, created_at, id, platform)
 PARTITION BY toYYYYMM(created_at);`);
       for (const q of initQuerys) {
         await this.ctx.service.clickhouse.query(q);

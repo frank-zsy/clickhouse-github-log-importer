@@ -9,6 +9,7 @@ function formatDateTime(d) {
 
 function commonParser(r) {
   const o = {
+    platform: 'GitHub',
     id: parseInt(r.id),
     type: r.type,
     actor_id: r.actor.id,
