@@ -58,7 +58,7 @@ export default (appInfo: EggAppInfo) => {
       database: 'opensource',
       application: 'x-lab-data-importer',
     },
-    table: 'gh_events',
+    table: 'events',
   };
 
   config.tugraph = {
@@ -72,6 +72,14 @@ export default (appInfo: EggAppInfo) => {
     url: process.env.NEO4J_URL,
     user: process.env.NEO4J_USER,
     password: process.env.NEO4J_PASSWORD,
+  };
+
+  config.gitee = {
+    token: '',
+    eventTable: 'events',
+    orgsReposTable: 'gitee_orgs_repos',
+    orgs: [],
+    repos: [],
   };
 
   // the return config will combines to EggAppConfig

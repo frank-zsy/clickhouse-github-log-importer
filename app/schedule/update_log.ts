@@ -5,6 +5,7 @@ module.exports = {
     cron: '0 0 */1 * * *',
     type: 'worker',
     immediate: true,
+    disable: false,
   },
   async task(ctx: Context) {
     if (!ctx.service.fileUtils.tryLock()) {
