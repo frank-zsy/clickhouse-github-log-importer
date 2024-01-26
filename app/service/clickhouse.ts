@@ -28,11 +28,16 @@ export default class Clickhouse extends Service {
 
   public async queryStream<T = any>(q: string, onRow: (row: T) => void, options: any = {}): Promise<void> {
     return new Promise(async resolve => {
-      const resultSet = await this.client.query({ query: q, format: 'JSONCompactEachRow', ...options });
-      const stream = resultSet.stream();
-      stream.on('data', (rows: Row[]) => rows.forEach(row => onRow(row.json())));
-      stream.on('end', () => resolve());
-      stream.on('error', (err: any) => console.error(`Query for ${q} error: ${err}`));
+      try {
+        const resultSet = await this.client.query({ query: q, format: 'JSONCompactEachRow', ...options });
+        const stream = resultSet.stream();
+        stream.on('data', (rows: Row[]) => rows.forEach(row => onRow(row.json())));
+        stream.on('end', () => resolve());
+        stream.on('error', (err: any) => console.error(`Query for ${q} error: ${err}`));
+      } catch (e) {
+        console.error(`Query for ${q} error: ${e}`);
+        resolve();
+      }
     });
   }
 

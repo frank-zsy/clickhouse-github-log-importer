@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable array-bracket-spacing */
 import { Service } from 'egg';
+import { readFileSync } from 'fs';
 const dateformat = require('dateformat');
 
 interface ReqContext {
@@ -8,11 +9,15 @@ interface ReqContext {
   type: 'org' | 'repo';
   maxId: number;
   minId: number;
+  createdAt: Date;
+  minCreatedAt: Date;
   prevId: number;
-  stage: 'new' | 'old';
+  stage: 'new' | 'old' | 'break';
 }
 
 export default class GiteeImporter extends Service {
+
+  private needParseOrg = false;
 
   private supportEventsMap = new Map<string, string>([
     ['IssueEvent', 'IssuesEvent'],
@@ -65,11 +70,16 @@ export default class GiteeImporter extends Service {
               // filter the events that already in database
               const filterEvents: any[] = [];
               for (const e of events) {
-                if (e.id === context.maxId) {
+                if (e.id <= context.maxId) {
                   // run into the lastest event, start to get from oldest
                   if (context.minId > 0) {
-                    context.stage = 'old';
-                    context.prevId = context.minId;
+                    if (context.minCreatedAt.getFullYear() > 1970 && context.minCreatedAt.getTime() - context.createdAt.getTime() < 3 * 24 * 60 * 60 * 1000) {
+                      // already get all events
+                      context.stage = 'break';
+                    } else {
+                      context.stage = 'old';
+                      context.prevId = context.minId;
+                    }
                   }
                   break;
                 } else {
@@ -78,53 +88,46 @@ export default class GiteeImporter extends Service {
               }
               await this.service.clickhouse.insertRecords(filterEvents, config.eventTable);
             } else {
-              // no maxId, first time insert
+              // no maxId, first time insert, insert until no data
               await this.service.clickhouse.insertRecords(events, config.eventTable);
             }
           } else {
+            // old stage, insert until no data
             await this.service.clickhouse.insertRecords(events, config.eventTable);
           }
-          this.requestEvents(context);
+          if (context.stage !== 'break') {
+            this.requestEvents(context);
+          }
         } catch (e: any) {
           this.logger.error(`Event parse error: ${e.message}, ${JSON.stringify(option.userdata)}, ${body}`);
         }
       },
     });
 
-    const idMap = new Map<string, { maxId: number; minId: number }>();
-    const loadOrgs = async () => {
-      const q = "SELECT org_login, argMax(id, created_at), argMin(id, created_at) FROM events WHERE platform='Gitee' GROUP BY org_login";
-      const result = await this.service.clickhouse.query<any[]>(q);
-      for (const r of result) {
-        const [org, maxId, minId] = r;
-        idMap.set(org, { maxId: parseInt(maxId), minId: parseInt(minId) });
-      }
-    };
+    const repoDataMap = new Map<string, { createdAt: Date; minCreatedAt: Date; maxId: number; minId: number }>();
     const loadRepos = async () => {
-      const q = "SELECT repo_name, argMax(id, created_at), argMin(id, created_at) FROM events WHERE platform='Gitee' GROUP BY repo_name";
+      const q = `SELECT name, created_at, min_ed, min_id, max_id FROM
+(SELECT id, name, created_at FROM gitee_orgs_repos WHERE type='repo')r
+LEFT JOIN
+(SELECT repo_id, min(created_at) AS min_ed, argMin(id, created_at) AS min_id, argMax(id, created_at) AS max_id FROM events WHERE platform='Gitee' GROUP BY repo_id)e
+ON r.id=e.repo_id`;
       const result = await this.service.clickhouse.query<any[]>(q);
       for (const r of result) {
-        const [name, maxId, minId] = r;
-        idMap.set(name, { maxId: parseInt(maxId), minId: parseInt(minId) });
+        const [name, createdAt, minCreateAt, minId, maxId] = r;
+        repoDataMap.set(name, {
+          createdAt: new Date(createdAt),
+          minCreatedAt: new Date(minCreateAt),
+          maxId: parseInt(maxId),
+          minId: parseInt(minId),
+        });
       }
     };
-    await loadOrgs();
     await loadRepos();
 
-    for (const o of orgsAndRepos.orgs) {
-      const ids = idMap.get(o);
-      const maxId = ids?.maxId ?? 0;
-      const minId = ids?.minId ?? 0;
-      // this.logger.info(`For org ${o} maxId=${maxId}, minId=${minId}`);
-      this.requestEvents({ name: o, type: 'org', prevId: -1, maxId, minId, stage: 'new' });
-    }
-
     for (const r of orgsAndRepos.repos) {
-      const ids = idMap.get(r);
-      const maxId = ids?.maxId ?? 0;
-      const minId = ids?.minId ?? 0;
-      // this.logger.info(`For repo ${r} maxId=${maxId}, minId=${minId}`);
-      this.requestEvents({ name: r, type: 'repo', prevId: -1, maxId, minId, stage: 'new' });
+      const repoData = repoDataMap.get(r)!;
+      // this.logger.info(`For repo ${r} maxId=${repoData.maxId}, minId=${repoData.minId}`);
+      this.requestEvents({ name: r, type: 'repo', prevId: -1, stage: 'new', ...repoData });
     }
 
     await this.service.requestExecutor.start();
@@ -287,23 +290,29 @@ export default class GiteeImporter extends Service {
     await this.createGiteeReposTable();
 
     const repos: string[] = config.repos;
-    const orgs: { name: string; split: boolean }[] = config.orgs;
+    readFileSync('./local_files/repo-list.20231130.csv')
+      .toString()
+      .split('\n')
+      .slice(1)
+      .map(r => r.split(',')[2])
+      .forEach(r => repos.push(r));
+    const orgs: string[] = config.orgs;
 
-    const orgsAndRepos: string[][] = await this.service.clickhouse.query(`SELECT name FROM ${config.orgsReposTable} WHERE name IN (${repos.map(r => `'${r}'`).join(',')}) OR name IN (${orgs.map(o => `'${o.name}'`).join(',')})`);
+    const orgsAndRepos: string[][] = await this.service.clickhouse.query(`SELECT name FROM ${config.orgsReposTable}`);
 
     const insertItems: any[] = [];
     this.service.requestExecutor.setOption({
-      workerRetry: 0,
-      workerRetryInterval: 10,
+      workerRetryInterval: 50,
       postProcessor: async (_res, body, option) => {
         try {
           const data = JSON.parse(body);
           if (!data.id) {
-            this.logger.info(`Error on parse orgs and repos: ${JSON.stringify(option.userdata)}, ${body}`);
+            this.logger.info(`Error on parse orgs and repos, missing id: ${JSON.stringify(option.userdata)}, ${body}`);
             return;
           }
           const item = {
             id: data.id,
+            created_at: this.formatDateTime(data.created_at ? data.created_at : new Date()),
             ...option.userdata,
           };
           insertItems.push(item);
@@ -318,27 +327,25 @@ export default class GiteeImporter extends Service {
       missingRepos.forEach(r => {
         this.service.requestExecutor.appendOptions({
           method: 'GET',
-          url: `https://gitee.com/api/v5/repos/${r}`,
+          url: `https://gitee.com/api/v5/repos/${r}?access_token=${config.token}`,
           userdata: {
             name: r,
             type: 'repo',
-            split: 0,
           },
         });
       });
     }
 
-    const missingOrgs = orgs.filter(o => !orgsAndRepos.find(r => r[0] === o.name));
+    const missingOrgs = orgs.filter(o => !orgsAndRepos.find(r => r[0] === o));
     if (missingOrgs.length > 0) {
       this.logger.info(`Goona insert ${missingOrgs.length} orgs`);
       missingOrgs.forEach(o => {
         this.service.requestExecutor.appendOptions({
           method: 'GET',
-          url: `https://gitee.com/api/v5/orgs/${o.name}`,
+          url: `https://gitee.com/api/v5/orgs/${o}?access_token=${config.token}`,
           userdata: {
-            name: o.name,
+            name: o,
             type: 'org',
-            split: o.split ? 1 : 0,
           },
         });
       });
@@ -352,7 +359,7 @@ export default class GiteeImporter extends Service {
     }
 
     // update split orgs into repos
-    const splitOrgs = await this.service.clickhouse.query(`SELECT name FROM ${config.orgsReposTable} WHERE type='org' AND split=1`);
+    const splitOrgs = await this.service.clickhouse.query(`SELECT name FROM ${config.orgsReposTable} WHERE type='org'`);
     const splitRepos: any[] = [];
     this.service.requestExecutor.setOption({
       postProcessor: async (_res, body, option) => {
@@ -368,7 +375,7 @@ export default class GiteeImporter extends Service {
               id: r.id,
               name: r.full_name,
               type: 'repo',
-              split: 0,
+              created_at: this.formatDateTime(r.created_at),
             };
             splitRepos.push(item);
           }
@@ -390,18 +397,20 @@ export default class GiteeImporter extends Service {
       },
     });
 
-    splitOrgs.forEach(o => {
-      this.logger.info(`Start to get repos for ${o}`);
-      this.service.requestExecutor.appendOptions({
-        method: 'GET',
-        url: `https://gitee.com/api/v5/orgs/${o}/repos?page=1&per_page=100&access_token=${config.token}`,
-        userdata: {
-          page: 1,
-          per_page: 100,
-          name: o,
-        },
+    if (this.needParseOrg) {
+      splitOrgs.forEach(o => {
+        this.logger.info(`Start to get repos for ${o}`);
+        this.service.requestExecutor.appendOptions({
+          method: 'GET',
+          url: `https://gitee.com/api/v5/orgs/${o}/repos?page=1&per_page=100&access_token=${config.token}`,
+          userdata: {
+            page: 1,
+            per_page: 100,
+            name: o,
+          },
+        });
       });
-    });
+    }
 
     await this.service.requestExecutor.start();
 
@@ -411,10 +420,10 @@ export default class GiteeImporter extends Service {
     }
 
     await this.service.clickhouse.query(`OPTIMIZE TABLE ${config.orgsReposTable} DEDUPLICATE`);
-    const results: any[] = await this.service.clickhouse.query(`SELECT name, type FROM ${config.orgsReposTable} WHERE split=0`);
+    const results: any[] = await this.service.clickhouse.query(`SELECT name, type FROM ${config.orgsReposTable} WHERE type='repo'`);
 
     return {
-      orgs: results.filter(r => r[1] === 'org').map(r => r[0]),
+      orgs: [],
       repos: results.filter(r => r[1] === 'repo').map(r => r[0]),
     };
   }
@@ -429,7 +438,7 @@ export default class GiteeImporter extends Service {
     \`id\` UInt64,
     \`name\` String,
     \`type\` Enum8('org' = 1, 'repo' = 2),
-    \`split\` UInt8
+    \`created_at\` DateTime
 ) ENGINE = ReplacingMergeTree
 ORDER BY (id, name, type);`;
     await this.service.clickhouse.query(q);

@@ -7,6 +7,7 @@ export default class AppBootHook {
 
   constructor(app: Application) {
     this.app = app;
+    (this.app as any).cache = new Map<string, any>();
   }
 
   public async didReady() {
