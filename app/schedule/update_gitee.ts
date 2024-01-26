@@ -2,7 +2,7 @@ import { Context } from 'egg';
 
 module.exports = {
   schedule: {
-    cron: '0 0 */1 * * *',
+    cron: '0 0 0 */3 * *',
     type: 'worker',
     immediate: true,
     disable: false,

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable array-bracket-spacing */
 import { Service } from 'egg';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 const dateformat = require('dateformat');
 
 interface ReqContext {
@@ -37,6 +37,7 @@ export default class GiteeImporter extends Service {
   private actionMap = new Map<string | undefined, string | null>([
     ['opened', 'opened'],
     ['open', 'opened'],
+    ['reopened', 'reopened'],
     ['closed', 'closed'],
     ['rejected', 'closed'],
     ['merged', 'closed'],
@@ -290,12 +291,14 @@ ON r.id=e.repo_id`;
     await this.createGiteeReposTable();
 
     const repos: string[] = config.repos;
-    readFileSync('./local_files/repo-list.20231130.csv')
-      .toString()
-      .split('\n')
-      .slice(1)
-      .map(r => r.split(',')[2])
-      .forEach(r => repos.push(r));
+    if (config.localFile && existsSync(config.localFile)) {
+      readFileSync(config.localFile)
+        .toString()
+        .split('\n')
+        .slice(1)
+        .map(r => r.split(',')[2])
+        .forEach(r => repos.push(r));
+    }
     const orgs: string[] = config.orgs;
 
     const orgsAndRepos: string[][] = await this.service.clickhouse.query(`SELECT name FROM ${config.orgsReposTable}`);

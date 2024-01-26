@@ -8,10 +8,10 @@
     "declarations": true
   },
   "scripts": {
-    "start": "tsc && export NODE_OPTIONS=\"--max-old-space-size=8192\" && egg-scripts start --daemon --title=egg-server-clickhouse-github-log-importer --port=9238 --workers=1",
+    "start": "tsc && export NODE_OPTIONS=\"--max-old-space-size=8192\" && egg-scripts start --daemon --title=egg-server-clickhouse-github-log-importer --port=9240 --workers=1",
     "start-docker": "tsc && egg-scripts start --max-old-space-size=8192 --title=egg-server-clickhouse-github-log-importer --port=9238 --workers=1",
     "stop": "egg-scripts stop --title=egg-server-clickhouse-github-log-importer",
-    "dev": "egg-bin --max-old-space-size=8192 dev --port=9239",
+    "dev": "egg-bin --max-old-space-size=8192 dev --port=9241",
     "debug": "egg-bin debug",
     "test-local": "egg-bin test",
     "test": "npm run lint -- --fix && npm run test-local",
