@@ -17,6 +17,7 @@ module.exports = {
     }
     cache.set(importerTaskKey, true);
     await ctx.service.giteeImporter.start();
+    ctx.logger.info('Task done.');
     cache.delete(importerTaskKey);
   },
 };
