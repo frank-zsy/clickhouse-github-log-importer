@@ -1,6 +1,6 @@
 import { Service } from 'egg';
 import { join } from 'path';
-import { existsSync, readFileSync, writeFileSync, unlinkSync, createReadStream } from 'fs';
+import { existsSync, readFileSync, writeFileSync, createReadStream } from 'fs';
 import { FileStatus } from '../types';
 import { createInterface } from 'readline';
 import { createGunzip } from 'zlib';
@@ -11,26 +11,6 @@ export default class FileUtils extends Service {
     const config = this.config.fileProcessor;
     const prefix = config.usingTugraph ? 'tugraph_' : (config.usingNeo4j ? 'neo4j_' : '');
     return join(config.baseDir, `${prefix}${config.metaFilePath}`);
-  }
-
-  public tryLock(): boolean {
-    const config = this.config.fileProcessor;
-    const lockFilePath = join(config.baseDir, config.lockFilePath);
-    if (existsSync(lockFilePath)) {
-      return false;
-    }
-    writeFileSync(lockFilePath, process.pid.toString());
-    return true;
-  }
-
-  public unlock() {
-    const config = this.config.fileProcessor;
-    const lockFilePath = join(config.baseDir, config.lockFilePath);
-    this.logger.info('Try unlock');
-    if (existsSync(lockFilePath)) {
-      this.logger.info('Unlocked');
-      unlinkSync(lockFilePath);
-    }
   }
 
   public getMetaData(): any {
@@ -47,6 +27,16 @@ export default class FileUtils extends Service {
       this.logger.error('Meta file parse error, create empty meta');
       return {};
     }
+  }
+
+  public getDateInfoFromFile(f: string): { year: number; month: number; day: number; hour: number } {
+    const matchResult = f.match(/.*\/(\d+)-(\d+)-(\d+)-(\d+).json.gz/);
+    if (!matchResult) {
+      return { year: -1, month: -1, day: -1, hour: -1 };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, array-bracket-spacing
+    const [_, year, month, day, hour] = matchResult.map(n => +n);
+    return { year, month, day, hour };
   }
 
   public writeMetaData(meta: any) {

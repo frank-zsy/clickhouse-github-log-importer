@@ -15,7 +15,6 @@ export default class AppBootHook {
       startTime: dateformat(new Date(), 'yyyy-mm-dd HH:MM:ss'),
       reason: '日常重启',
     }));
-    this.app.createAnonymousContext().service.fileUtils.unlock();
     process.on('uncaughtException', e => this.app.logger.error(e));
   }
 }

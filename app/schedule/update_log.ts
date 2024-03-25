@@ -8,12 +8,14 @@ module.exports = {
     disable: false,
   },
   async task(ctx: Context) {
-    if (!ctx.service.fileUtils.tryLock()) {
-      // do not move this check into try-catch block
-      // because return will trigger finally block any way
-      ctx.logger.info('Still processing, exit for this time');
+    const importerTaskKey = 'GitHubImporterTask';
+    const cache: Map<string, any> = (ctx.app as any).cache;
+    ctx.logger.info('App cache is ', Array.from(cache.entries()));
+    if (cache.has(importerTaskKey)) {
+      ctx.logger.info('Task still running, skip for now.');
       return;
     }
+    cache.set(importerTaskKey, true);
     try {
       const showStat = (prefix: any, meta: any) => {
         ctx.logger.info(prefix, 'Meta stat ', ctx.service.fileUtils.metaDataStat(meta));
@@ -24,12 +26,18 @@ module.exports = {
       // check exist
       await ctx.service.logExistChecker.check(metaData);
       showStat('Check exist finished,', metaData);
+      // check verify, first time, check for partially downloaded file
+      await ctx.service.logValidChecker.check(metaData);
+      showStat('Check valid finished,', metaData);
       // download
       await ctx.service.logDownloader.download(metaData);
       showStat('Download finished', metaData);
       // check verify
       await ctx.service.logValidChecker.check(metaData);
       showStat('Check valid finished,', metaData);
+      // check import status
+      await ctx.service.logImporterStatusChecker.check(metaData);
+      showStat('Check import status finished,', metaData);
       // import file
       await ctx.service.logImporter.import(metaData);
       showStat('Import finished,', metaData);
@@ -39,7 +47,7 @@ module.exports = {
       ctx.logger.error(e);
     } finally {
       ctx.logger.info('Process done.');
-      ctx.service.fileUtils.unlock();
+      cache.delete(importerTaskKey);
     }
   },
 };

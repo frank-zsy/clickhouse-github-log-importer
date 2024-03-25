@@ -14,6 +14,10 @@ export default class LogDownloader extends Service {
     for (const k in meta) {
       const s = meta[k];
       if (s === FileStatus.NeedDownload) {
+        const { year, month } = this.service.fileUtils.getDateInfoFromFile(k);
+        const current = new Date().getFullYear() * 1000 + new Date().getMonth();
+        // do not try not download the file 6 month ago, must be missing
+        if (current - year * 1000 + month > 6) continue;
         // need download the file
         const fileName = k.split('/').pop() ?? '';
         const url = `${config.baseUrl}${fileName}`;
