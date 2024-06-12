@@ -12,7 +12,7 @@ export default class LogImporter extends Service {
   public async import(meta: any) {
     const config = this.config.fileProcessor;
     const dbConfig = this.config.clickhouse;
-    await this.init(config.forceInit);
+    await this.init(false);
     if (config.forceInit) {
       for (const k in meta) {
         if (meta[k] === FileStatus.Imported) {

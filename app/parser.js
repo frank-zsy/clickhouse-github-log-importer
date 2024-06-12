@@ -51,9 +51,7 @@ function issuesParser(r) {
     o.issue_author_login = issue.user.login;
     o.issue_author_type = issue.user.type;
   }
-  if (o.issue_author_association) {
-    o.issue_author_association = issue.author_association;
-  }
+  o.issue_author_association = issue.author_association ?? 'NONE';
   if (issue.assignee) {
     o.issue_assignee_id = issue.assignee.id;
     o.issue_assignee_login = issue.assignee.login;
@@ -83,9 +81,7 @@ function issueCommentParser(r) {
   o.issue_comment_author_id = comment.user.id;
   o.issue_comment_author_login = comment.user.login;
   o.issue_comment_author_type = comment.user.type;
-  if (comment.author_association) {
-    o.issue_comment_author_association = comment.author_association;
-  }
+  o.issue_comment_author_association = comment.author_association ?? 'NONE';
   return o;
 }
 
@@ -156,7 +152,7 @@ function pullRequestReviewParser(r) {
     o.pull_review_id = review.id;
   }
   o.pull_review_state = review.state;
-  o.pull_review_author_association = review.author_association;
+  o.pull_review_author_association = review.author_association ?? 'NONE';
   return o;
 }
 
@@ -178,9 +174,7 @@ function pullRequestReviewCommentParser(r) {
     o.pull_review_comment_author_login = comment.user.login;
     o.pull_review_comment_author_type = comment.user.type;
   }
-  if (comment.author_association) {
-    o.pull_review_comment_author_association = comment.author_association;
-  }
+  o.pull_review_comment_author_association = comment.author_association ?? 'NONE';
   o.body = comment.body;
   o.pull_review_comment_created_at = formatDateTime(comment.created_at);
   o.pull_review_comment_updated_at = formatDateTime(comment.updated_at);
@@ -305,9 +299,7 @@ function commitCommentParser(r) {
     o.commit_comment_author_login = comment.user.login;
     o.commit_comment_author_type = comment.user.type;
   }
-  if (comment.author_association) {
-    o.commit_comment_author_association = comment.author_association;
-  }
+  o.commit_comment_author_association = comment.author_association ?? 'NONE';
   o.body = comment.body ?? '';
   if (comment.path) {
     o.commit_comment_path = comment.path;
