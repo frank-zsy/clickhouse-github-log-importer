@@ -61,6 +61,7 @@ export default class LogImporter extends Service {
           maxOldGenerationSizeMb: config.workerMaxMemoryMb,
         },
       });
+      this.logger.info(`Start import worker of ${config.workerNum} threads.`);
       const params: { filePath: string; key: string }[] = [];
       for (const f in meta) {
         if (meta[f] === FileStatus.Verified) {
