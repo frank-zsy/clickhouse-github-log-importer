@@ -191,8 +191,8 @@ function pushParser(r) {
   if (!Array.isArray(r.payload.commits)) {
     r.payload.commits = [];
   }
-  o['push_commits.name'] = r.payload.commits.map(c => (c.author ? c.author.name : ''));
-  o['push_commits.email'] = r.payload.commits.map(c => (c.author ? c.author.email : ''));
+  o['push_commits.name'] = r.payload.commits.map(c => (c.author ? c.author.name : '') ?? '');
+  o['push_commits.email'] = r.payload.commits.map(c => (c.author ? c.author.email : '') ?? '');
   o['push_commits.message'] = r.payload.commits.map(c => c.message ?? '');
   return o;
 }
