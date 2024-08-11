@@ -272,6 +272,7 @@ ON r.id=e.repo_id`;
         if (!parsePull(payload)) return null;
       } else if (type === 'PullRequestReviewCommentEvent') {
         if (!parseIssue(payload.pull_request)) return null;
+        if (!parsePull(payload.pull_request)) return null;
         if (!parseComment(payload.comment)) return null;
       } else if (type === 'CommitCommentEvent') {
         if (!parseCommitComment(payload.comment)) return null;
