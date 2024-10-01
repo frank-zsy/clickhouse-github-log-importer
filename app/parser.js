@@ -88,7 +88,6 @@ function issueCommentParser(r) {
 function pullRequestParser(r) {
   const o = issuesParser(r);
   const pull = r.payload.pull_request;
-  const repo = pull.base.repo;
   const requestedReviewer = pull.requested_reviewers?.length > 0 ? pull.requested_reviewers[0] : undefined;
 
   o.pull_commits = pull.commits ?? 0;
@@ -116,31 +115,6 @@ function pullRequestParser(r) {
   o.pull_head_repo_id = headRepo?.id ?? 0;
   o.pull_head_repo_name = headRepo?.full_name ?? '';
   o.pull_head_ref = pull.head.ref;
-
-  if (repo.description) {
-    o.repo_description = repo.description;
-  }
-  o.repo_size = repo.size;
-  o.repo_stargazers_count = repo.stargazers_count;
-  o.repo_forks_count = Math.max(Number.isNaN(parseInt(repo.forks_count)) ? 0 : parseInt(repo.forks_count), 0);
-  if (repo.language) {
-    o.repo_language = repo.language;
-  }
-  o.repo_has_issues = repo.has_issues;
-  o.repo_has_projects = repo.has_projects ?? false;
-  o.repo_has_downloads = repo.has_downloads;
-  o.repo_has_wiki = repo.has_wiki;
-  o.repo_has_pages = repo.has_pages;
-  if (repo.license) {
-    o.repo_license = repo.license.name;
-  }
-  if (repo.default_branch) {
-    o.repo_default_branch = repo.default_branch;
-  }
-  o['repo_topics.name'] = repo.topics ?? [];
-  o.repo_created_at = formatDateTime(repo.created_at);
-  o.repo_updated_at = formatDateTime(repo.updated_at);
-  o.repo_pushed_at = formatDateTime(repo.pushed_at);
   return o;
 }
 
