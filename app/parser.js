@@ -4,6 +4,9 @@ const dateformat = require('dateformat');
 
 // use true as third param to convert to UTC time
 function formatDateTime(d) {
+  if (!d) {
+    return undefined;
+  }
   return dateformat(new Date(d), 'yyyy-mm-dd HH:MM:ss', true);
 }
 
@@ -63,8 +66,12 @@ function issuesParser(r) {
   o['issue_assignees.login'] = issue.assignees.map(a => a.login ?? '');
   o['issue_assignees.id'] = issue.assignees.map(a => a.id ?? 0);
   o.issue_comments = issue.comments ?? 0;
-  o.issue_created_at = formatDateTime(issue.created_at);
-  o.issue_updated_at = formatDateTime(issue.updated_at);
+  if (issue.created_at) {
+    o.issue_created_at = formatDateTime(issue.created_at);
+  }
+  if (issue.updated_at) {
+    o.issue_updated_at = formatDateTime(issue.updated_at);
+  }
   if (issue.closed_at) {
     o.issue_closed_at = formatDateTime(issue.closed_at);
   }
@@ -150,8 +157,12 @@ function pullRequestReviewCommentParser(r) {
   }
   o.pull_review_comment_author_association = comment.author_association ?? 'NONE';
   o.body = comment.body;
-  o.pull_review_comment_created_at = formatDateTime(comment.created_at);
-  o.pull_review_comment_updated_at = formatDateTime(comment.updated_at);
+  if (comment.created_at) {
+    o.pull_review_comment_created_at = formatDateTime(comment.created_at);
+  }
+  if (comment.updated_at) {
+    o.pull_review_comment_updated_at = formatDateTime(comment.updated_at);
+  }
   return o;
 }
 
@@ -246,7 +257,9 @@ function releaseParser(r) {
     o.release_author_type = release.author.type;
   }
   o.release_prerelease = release.prerelease;
-  o.release_created_at = formatDateTime(release.created_at);
+  if (release.created_at) {
+    o.release_created_at = formatDateTime(release.created_at);
+  }
   if (release.published_at) {
     o.release_published_at = formatDateTime(release.published_at);
   }
@@ -285,8 +298,12 @@ function commitCommentParser(r) {
     o.commit_comment_line = comment.line.toString();
   }
   o.commit_comment_sha = comment.commit_id;
-  o.commit_comment_created_at = formatDateTime(comment.created_at);
-  o.commit_comment_updated_at = formatDateTime(comment.updated_at);
+  if (comment.created_at) {
+    o.commit_comment_created_at = formatDateTime(comment.created_at);
+  }
+  if (comment.updated_at) {
+    o.commit_comment_updated_at = formatDateTime(comment.updated_at);
+  }
   return o;
 }
 

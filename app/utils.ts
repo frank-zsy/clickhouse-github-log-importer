@@ -19,15 +19,14 @@ const reviewStateType = "Enum('approved' = 1, 'commented' = 2, 'dismissed' = 3, 
 
 export const FieldMap = new Map<string, string>([
   // common
-  ['platform', "Enum('GitHub' = 1, 'Gitee' = 2, 'AtomGit' = 3, 'GitLab.com' = 4, 'Gitea' = 5, 'GitLab.cn' = 6) COMMENT '日志所属平台'"],
+  ['platform', "LowCardinality(String) COMMENT '日志所属平台'"],
   ['id', "UInt64 COMMENT '日志 ID'"],
   ['type', `Enum('CommitCommentEvent' = 1, 'CreateEvent' = 2, 'DeleteEvent' = 3, 'ForkEvent' = 4,
                     'GollumEvent' = 5, 'IssueCommentEvent' = 6, 'IssuesEvent' = 7, 'MemberEvent' = 8,
                     'PublicEvent' = 9, 'PullRequestEvent' = 10, 'PullRequestReviewCommentEvent' = 11,
                     'PushEvent' = 12, 'ReleaseEvent' = 13, 'WatchEvent' = 14, 'PullRequestReviewEvent' = 15,
                     'IssuesReactionEvent' = 16, 'IssueCommentsReactionEvent' = 17, 'LabelEvent' = 18, 'ReactionPlaceholderEvent' = 126, 'LabelPlaceholderEvent' = 127) COMMENT '日志事件类型'`],
-  ['action', `Enum('added' = 1, 'closed' = 2, 'created' = 3, 'labeled' = 4, 'opened' = 5, 'published' = 6,
-                    'reopened' = 7, 'started' = 8) COMMENT '日志事件动作'`],
+  ['action', "LowCardinality(String) COMMENT '日志事件动作'"],
   ['actor_id', "UInt64 COMMENT '用户平台 ID'"],
   ['actor_login', "LowCardinality(String) COMMENT '用户账户名'"],
   ['repo_id', "UInt64 COMMENT '仓库平台 ID'"],
