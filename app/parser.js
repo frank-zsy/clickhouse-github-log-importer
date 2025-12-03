@@ -199,50 +199,6 @@ function watchParser(r) {
   return commonParser(r);
 }
 
-function deleteParser(r) {
-  const o = commonParser(r);
-  o.delete_ref = r.payload.ref;
-  o.delete_ref_type = r.payload.ref_type;
-  o.delete_pusher_type = r.payload.pusher_type;
-  return o;
-}
-
-function createParser(r) {
-  const o = commonParser(r);
-  if (r.payload.ref) {
-    o.create_ref = r.payload.ref;
-    o.create_ref_type = r.payload.ref_type;
-  }
-  o.create_master_branch = r.payload.master_branch;
-  o.create_description = r.payload.description ?? '';
-  o.create_pusher_type = r.payload.pusher_type;
-  return o;
-}
-
-function gollumParser(r) {
-  const o = commonParser(r);
-  if (!Array.isArray(r.payload.pages)) {
-    r.payload.pages = [];
-  }
-  o['gollum_pages.page_name'] = r.payload.pages.map(p => p.page_name ?? '');
-  o['gollum_pages.title'] = r.payload.pages.map(p => p.title ?? '');
-  o['gollum_pages.action'] = r.payload.pages.map(p => p.action ?? '');
-  return o;
-}
-
-function memberParser(r) {
-  const o = commonParser(r);
-  const member = r.payload.member;
-  o.member_id = member.id;
-  o.member_login = member.login;
-  o.member_type = member.type;
-  return o;
-}
-
-function publicParser(r) {
-  return commonParser(r);
-}
-
 function releaseParser(r) {
   const o = commonParser(r);
   const release = r.payload.release;
@@ -316,11 +272,6 @@ module.exports = new Map([
   ['PushEvent', pushParser],
   ['ForkEvent', forkParser],
   ['WatchEvent', watchParser],
-  ['DeleteEvent', deleteParser],
-  ['CreateEvent', createParser],
-  ['GollumEvent', gollumParser],
-  ['MemberEvent', memberParser],
-  ['PublicEvent', publicParser],
   ['ReleaseEvent', releaseParser],
   ['CommitCommentEvent', commitCommentParser],
 ]);

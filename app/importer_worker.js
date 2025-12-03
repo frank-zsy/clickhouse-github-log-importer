@@ -32,7 +32,7 @@ async function insertRecords(filePath, dbConfig) {
         try {
           const item = JSON.parse(line);
           const row = ParseFuncMap.get(item.type)?.call(undefined, item);
-          if (row) { stream.push(row); }
+          if (row) { stream.push({ ...row, from_api: 0 }); }
         } catch {
           console.log(`Error on parse record, line=${line}`);
         }

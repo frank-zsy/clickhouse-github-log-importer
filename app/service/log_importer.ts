@@ -120,9 +120,11 @@ export default class LogImporter extends Service {
       initQuerys.push(`CREATE TABLE IF NOT EXISTS ${dbConfig.table}
 (
 ${getTableSchema(FieldMap)}
-) ENGINE = ReplacingMergeTree
-ORDER BY (type, repo_id, org_id, actor_id, created_at, id, platform)
-PARTITION BY toYYYYMM(created_at);`);
+) ENGINE = ReplacingMergeTree(from_api)
+PARTITION BY (toYYYYMM(created_at))
+PRIMARY KEY (platform, org_id, repo_id, actor_id, type, action, toYear(created_at), toYYYYMM(created_at))
+ORDER BY (platform, org_id, repo_id, actor_id, type, action, toYear(created_at), toYYYYMM(created_at), issue_id, issue_comment_id, pull_review_id, pull_review_comment_id, commit_comment_id, push_id, release_id)
+SETTINGS index_granularity = 8192;`);
       for (const q of initQuerys) {
         await this.ctx.service.clickhouse.query(q);
       }
